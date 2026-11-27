@@ -50,28 +50,44 @@ function fromBase64Url(input: string): Uint8Array<ArrayBuffer> {
   return out
 }
 
+function resolveSealingKeyMaterial(env: WorkerEnv): { source: 'explicit' | 'database'; value: string } | null {
+  const explicit = env.EXAM_SEALING_SECRET?.trim() ?? ''
+  if (explicit.length >= 16) return { source: 'explicit', value: explicit }
+
+  // The Neon connection string is already a high-entropy Cloudflare Worker Secret.
+  // Use it as a domain-separated fallback so the first exam can be published without
+  // requiring a second manual secret. Keep the database credential stable while exams
+  // sealed with this fallback remain in use. EXAM_SEALING_SECRET, when configured,
+  // always takes precedence.
+  const databaseUrl = env.DATABASE_URL?.trim() ?? ''
+  if (databaseUrl.length >= 32) return { source: 'database', value: databaseUrl }
+  return null
+}
+
 export function isExamSealingSecretConfigured(env: WorkerEnv): boolean {
-  const secret = env.EXAM_SEALING_SECRET?.trim() ?? ''
-  return secret.length >= 16
+  return resolveSealingKeyMaterial(env) !== null
 }
 
 /**
- * Derives an AES-256-GCM CryptoKey from EXAM_SEALING_SECRET using SHA-256.
- * Matches Node.js createHash('sha256').update(`tinlab-configured:${secret}`) byte-for-byte
- * so exams sealed on Node.js and Cloudflare Workers interoperate seamlessly when sharing
- * the same EXAM_SEALING_SECRET.
+ * Derives an AES-256-GCM CryptoKey using a domain-separated secret.
+ * An explicit EXAM_SEALING_SECRET takes precedence. When it is absent, the
+ * high-entropy DATABASE_URL Worker Secret is used as a stable fallback.
  */
 async function importSealingAesKey(env: WorkerEnv): Promise<CryptoKey> {
-  const configured = env.EXAM_SEALING_SECRET?.trim() ?? ''
-  if (configured.length < 16) {
+  const resolved = resolveSealingKeyMaterial(env)
+  if (!resolved) {
     throw new Error(
-      'Máy chủ Worker chưa cấu hình EXAM_SEALING_SECRET (tối thiểu 16 ký tự). Vui lòng thiết lập Worker Secret EXAM_SEALING_SECRET.'
+      'Máy chủ Worker cần DATABASE_URL hoặc EXAM_SEALING_SECRET để niêm phong đáp án đề thi.'
     )
   }
 
   const keyMaterial = await crypto.subtle.digest(
     'SHA-256',
-    encoder.encode(`tinlab-configured:${configured}`)
+    encoder.encode(
+      resolved.source === 'explicit'
+        ? `tinlab-configured:${resolved.value}`
+        : `tinlab-database-sealing-v1:${resolved.value}`
+    )
   )
 
   return crypto.subtle.importKey(
