@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  GoogleAuthProvider,
   onAuthStateChanged,
-  signInWithPopup,
+  sendPasswordResetEmail,
+  signInWithEmailAndPassword,
   signOut,
   type User,
 } from 'firebase/auth'
@@ -55,8 +55,6 @@ import {
 import {
   auth,
   clearGoogleDriveToken,
-  googleProvider,
-  setGoogleDriveToken,
 } from '../lib/firebase'
 import {
   fetchTeacherImports,
@@ -77,33 +75,6 @@ import type {
 
 interface TeacherPageProps {
   onNavigate: (page: NavPage) => void
-}
-
-function GoogleBrandMark() {
-  return (
-    <svg
-      className="h-4 w-4 shrink-0"
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-    >
-      <path
-        fill="#4285F4"
-        d="M23.49 12.27c0-.79-.07-1.54-.2-2.27H12v4.3h6.44a5.5 5.5 0 0 1-2.39 3.61v3h3.87c2.26-2.08 3.57-5.15 3.57-8.64Z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 24c3.24 0 5.95-1.07 7.93-2.91l-3.87-3c-1.07.72-2.45 1.15-4.06 1.15-3.12 0-5.77-2.11-6.72-4.95H1.28v3.1A12 12 0 0 0 12 24Z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M5.28 14.29A7.2 7.2 0 0 1 4.9 12c0-.8.14-1.57.38-2.29V6.61H1.28A12 12 0 0 0 0 12c0 1.94.46 3.77 1.28 5.39l4-3.1Z"
-      />
-      <path
-        fill="#EA4335"
-        d="M12 4.76c1.76 0 3.34.61 4.59 1.8l3.44-3.44C17.95 1.19 15.24 0 12 0A12 12 0 0 0 1.28 6.61l4 3.1C6.23 6.87 8.88 4.76 12 4.76Z"
-      />
-    </svg>
-  )
 }
 
 type WorkspaceTab =
@@ -130,6 +101,8 @@ export function TeacherPage({ onNavigate }: TeacherPageProps) {
 
   const [authActionLoading, setAuthActionLoading] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
+  const [loginEmail, setLoginEmail] = useState('')
+  const [loginPassword, setLoginPassword] = useState('')
 
   const [activeTab, setActiveTab] = useState<WorkspaceTab>('results')
   const [savedQuestions, setSavedQuestions] = useState<SavedQuestionBankItem[]>([])
@@ -239,7 +212,7 @@ export function TeacherPage({ onNavigate }: TeacherPageProps) {
           clearWorkspaceData()
           setDeniedNotice({
             email: firebaseUser.email || '',
-            message: 'Tài khoản Google này chưa được cấp quyền quản trị TIN LAB.',
+            message: 'Email này chưa được cấp quyền quản trị TIN LAB.',
           })
           await signOut(auth).catch(() => undefined)
           clearGoogleDriveToken()
@@ -254,7 +227,7 @@ export function TeacherPage({ onNavigate }: TeacherPageProps) {
             email: firebaseUser.email || '',
             message:
               err.message ||
-              'Tài khoản Google này chưa được cấp quyền quản trị TIN LAB.',
+              'Email này chưa được cấp quyền quản trị TIN LAB.',
           })
           clearGoogleDriveToken()
           await signOut(auth).catch(() => undefined)
@@ -287,38 +260,62 @@ export function TeacherPage({ onNavigate }: TeacherPageProps) {
     return () => unsubscribe()
   }, [clearWorkspaceData, verifyServerSuperAdminRole])
 
-  const handleGoogleSignIn = async () => {
+  const handleEmailPasswordSignIn = async () => {
     setAuthError(null)
     setRbacError(null)
     setDeniedNotice(null)
+    const email = loginEmail.trim().toLowerCase()
+    if (!email || !loginPassword) {
+      setAuthError('Vui lòng nhập email và mật khẩu.')
+      return
+    }
     setAuthActionLoading(true)
     try {
-      const result = await signInWithPopup(auth, googleProvider)
-      const credential = GoogleAuthProvider.credentialFromResult(result)
-      if (credential?.accessToken) {
-        setGoogleDriveToken(credential.accessToken, result.user.email)
-      }
+      await signInWithEmailAndPassword(auth, email, loginPassword)
+      setLoginPassword('')
     } catch (err) {
       const code =
         typeof err === 'object' && err !== null && 'code' in err
           ? String((err as { code?: unknown }).code ?? '')
           : ''
-      const msg = err instanceof Error ? err.message : String(err)
-      if (code === 'auth/popup-closed-by-user' || msg.includes('popup-closed-by-user')) {
-        setAuthError('Cửa sổ đăng nhập Google đã bị đóng trước khi hoàn tất.')
-      } else if (code === 'auth/popup-blocked' || msg.includes('popup-blocked')) {
-        setAuthError(
-          'Trình duyệt đang chặn cửa sổ đăng nhập Google. Vui lòng cho phép popup cho trang này rồi thử lại.'
-        )
-      } else if (
-        code === 'auth/unauthorized-domain' ||
-        msg.includes('unauthorized-domain')
-      ) {
-        setAuthError(
-          `Tên miền hiện tại (${window.location.hostname}) chưa được thêm vào Authorized domains trong Firebase Authentication. Vui lòng thêm tên miền này trong Firebase Console → Authentication → Settings → Authorized domains.`
-        )
+      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') {
+        setAuthError('Email hoặc mật khẩu không đúng. Nếu đây là tài khoản Google cũ, cần thiết lập mật khẩu lần đầu cho tài khoản.')
+      } else if (code === 'auth/too-many-requests') {
+        setAuthError('Đăng nhập thất bại quá nhiều lần. Vui lòng chờ rồi thử lại.')
+      } else if (code === 'auth/operation-not-allowed') {
+        setAuthError('Firebase chưa bật phương thức Email/Mật khẩu. Hãy bật trong Authentication → Sign-in method.')
+      } else if (code === 'auth/invalid-email') {
+        setAuthError('Địa chỉ email không hợp lệ.')
       } else {
-        setAuthError('Không thể mở đăng nhập bằng Google lúc này. Vui lòng thử lại.')
+        setAuthError('Không thể đăng nhập lúc này. Vui lòng kiểm tra email, mật khẩu và thử lại.')
+      }
+    } finally {
+      setAuthActionLoading(false)
+    }
+  }
+
+  const handlePasswordReset = async () => {
+    setAuthError(null)
+    const email = loginEmail.trim().toLowerCase()
+    if (!email) {
+      setAuthError('Hãy nhập email trước khi yêu cầu đặt lại mật khẩu.')
+      return
+    }
+    setAuthActionLoading(true)
+    try {
+      await sendPasswordResetEmail(auth, email)
+      setAuthError('Đã gửi yêu cầu đặt lại mật khẩu. Hãy kiểm tra hộp thư đến và thư rác.')
+    } catch (err) {
+      const code =
+        typeof err === 'object' && err !== null && 'code' in err
+          ? String((err as { code?: unknown }).code ?? '')
+          : ''
+      if (code === 'auth/invalid-email') {
+        setAuthError('Địa chỉ email không hợp lệ.')
+      } else if (code === 'auth/operation-not-allowed') {
+        setAuthError('Firebase chưa bật phương thức Email/Mật khẩu.')
+      } else {
+        setAuthError('Không gửi được email đặt lại mật khẩu. Tài khoản có thể chưa được thiết lập đăng nhập bằng email/mật khẩu.')
       }
     } finally {
       setAuthActionLoading(false)
@@ -361,7 +358,7 @@ export function TeacherPage({ onNavigate }: TeacherPageProps) {
               Quản trị kết quả học sinh, thư viện tài liệu và ngân hàng đề thi
             </h1>
             <p className="text-sm sm:text-base leading-relaxed text-[#203247]">
-              Khu vực quản trị sử dụng xác thực Google OAuth và kiểm tra danh sách Super Admin trực tiếp ở phía máy chủ. Học sinh không cần tài khoản để làm bài luyện tập và kiểm tra.
+              Khu vực quản trị sử dụng email/mật khẩu; máy chủ xác minh ID Token Firebase và đối chiếu danh sách Super Admin được cấp phép. Học sinh không cần tài khoản để làm bài luyện tập và kiểm tra.
             </p>
           </div>
 
@@ -380,7 +377,7 @@ export function TeacherPage({ onNavigate }: TeacherPageProps) {
       {!authReady || (user && rbacChecking) ? (
         <section className="rounded-xl border border-slate-200 bg-white p-8 flex items-center gap-3 text-sm text-[#65758B]">
           <Loader2 className="h-5 w-5 animate-spin text-[#2878B8]" />
-          <span>Đang xác thực tài khoản Google và kiểm tra quyền quản trị trên máy chủ...</span>
+          <span>Đang xác thực tài khoản và kiểm tra quyền quản trị trên máy chủ...</span>
         </section>
       ) : !user ? (
         <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
@@ -390,67 +387,81 @@ export function TeacherPage({ onNavigate }: TeacherPageProps) {
                 Đăng nhập quản trị
               </h2>
               <p className="text-xs leading-relaxed text-[#65758B]">
-                Chọn tài khoản Google Super Admin đã được cấp quyền để truy cập bảng điều khiển quản trị, kết quả học sinh và ngân hàng câu hỏi TIN LAB.
+                Sử dụng email và mật khẩu của tài khoản Super Admin đã được cấp quyền.
               </p>
             </div>
 
             {deniedNotice && (
-              <div
-                role="alert"
-                className="flex items-start gap-2.5 rounded-lg border border-[#D94B45]/45 bg-[#FDF1F0] px-3.5 py-3 text-xs text-[#A92F2A]"
-              >
-                <ShieldAlert className="h-4 w-4 shrink-0 mt-0.5 text-[#D94B45]" />
-                <div className="space-y-1">
-                  <div className="font-bold text-[#8E221E]">{deniedNotice.message}</div>
-                  {deniedNotice.email && (
-                    <div className="text-[11px] text-[#A92F2A]/90">
-                      Email vừa chọn: <strong className="font-mono">{deniedNotice.email}</strong>. Phiên tạm đã được đăng xuất tự động — bạn có thể chọn lại tài khoản Google Super Admin khác bên dưới.
-                    </div>
-                  )}
-                </div>
+              <div role="alert" className="rounded-lg border border-[#D94B45]/45 bg-[#FDF1F0] px-3.5 py-3 text-xs text-[#A92F2A]">
+                <div className="font-bold">{deniedNotice.message}</div>
+                {deniedNotice.email && <div className="mt-1">Email: <strong className="font-mono">{deniedNotice.email}</strong></div>}
               </div>
             )}
 
             {authError && (
-              <div
-                role="alert"
-                className="flex items-start gap-2.5 rounded-lg border border-[#D94B45]/40 bg-[#FDF1F0] px-3.5 py-3 text-xs text-[#A92F2A]"
-              >
+              <div role="alert" className="flex items-start gap-2.5 rounded-lg border border-[#D94B45]/40 bg-[#FDF1F0] px-3.5 py-3 text-xs text-[#A92F2A]">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-[#D94B45]" />
                 <span>{authError}</span>
               </div>
             )}
 
+            <form
+              className="space-y-3"
+              onSubmit={(event) => {
+                event.preventDefault()
+                void handleEmailPasswordSignIn()
+              }}
+            >
+              <label className="block space-y-1.5 text-xs font-semibold text-[#203247]">
+                Email quản trị
+                <input
+                  type="email"
+                  autoComplete="username"
+                  required
+                  value={loginEmail}
+                  onChange={(event) => setLoginEmail(event.target.value)}
+                  placeholder="Nhập email Super Admin"
+                  className="w-full rounded-lg border border-slate-300 px-3.5 py-3 text-sm font-normal outline-none focus:border-[#2878B8] focus:ring-2 focus:ring-[#2878B8]/15"
+                />
+              </label>
+              <label className="block space-y-1.5 text-xs font-semibold text-[#203247]">
+                Mật khẩu
+                <input
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={loginPassword}
+                  onChange={(event) => setLoginPassword(event.target.value)}
+                  placeholder="Nhập mật khẩu"
+                  className="w-full rounded-lg border border-slate-300 px-3.5 py-3 text-sm font-normal outline-none focus:border-[#2878B8] focus:ring-2 focus:ring-[#2878B8]/15"
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={authActionLoading}
+                className="w-full inline-flex items-center justify-center gap-2 rounded-lg bg-[#2878B8] px-5 py-3 min-h-[46px] text-sm font-semibold text-white hover:bg-[#123B68] disabled:opacity-60 transition-colors"
+              >
+                {authActionLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ShieldCheck className="h-4 w-4" />}
+                Đăng nhập Super Admin
+              </button>
+            </form>
+
             <button
               type="button"
               disabled={authActionLoading}
-              onClick={() => void handleGoogleSignIn()}
-              className="w-full inline-flex items-center justify-center gap-2.5 rounded-lg border border-slate-300 bg-white px-5 py-3 min-h-[46px] text-sm font-semibold text-[#123B68] shadow-xs hover:border-[#2878B8] hover:bg-[#F3F6FA] disabled:opacity-60 transition-colors whitespace-nowrap"
+              onClick={() => void handlePasswordReset()}
+              className="text-xs font-semibold text-[#2878B8] hover:text-[#123B68] disabled:opacity-60"
             >
-              {authActionLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin text-[#2878B8]" />
-                  <span>Đang mở xác thực Google...</span>
-                </>
-              ) : (
-                <>
-                  <GoogleBrandMark />
-                  <span>Đăng nhập bằng Google</span>
-                </>
-              )}
+              Quên mật khẩu / Gửi email đặt lại mật khẩu
             </button>
 
             <div className="rounded-lg border border-slate-200 bg-[#F3F6FA] p-3.5 text-xs text-[#65758B] leading-relaxed">
-              Hệ thống không sử dụng mật khẩu riêng cho trang quản trị và không cho phép tự đăng ký. Danh tính Google được gửi về máy chủ để xác minh chữ ký ID Token và đối chiếu danh sách Super Admin được cấp phép.
+              Không có chức năng tự đăng ký. Máy chủ chỉ cấp quyền quản trị cho email nằm trong danh sách Super Admin đã cấu hình.
             </div>
 
             <div className="border-t border-slate-200 pt-4 flex items-center justify-between gap-3 text-xs">
               <span className="text-[#65758B]">Học sinh làm bài không cần đăng nhập</span>
-              <button
-                type="button"
-                onClick={() => onNavigate('student')}
-                className="font-semibold text-[#2878B8] hover:text-[#123B68] whitespace-nowrap shrink-0"
-              >
+              <button type="button" onClick={() => onNavigate('student')} className="font-semibold text-[#2878B8] hover:text-[#123B68] whitespace-nowrap shrink-0">
                 Vào khu vực Học sinh →
               </button>
             </div>
