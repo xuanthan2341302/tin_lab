@@ -1,0 +1,8 @@
+{
+  "name": "TIN LAB",
+  "description": "Nền tảng học tập, ngân hàng câu hỏi AI Agent và thi trực tuyến môn Tin học 12 dành cho học sinh và quản trị viên THPT.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

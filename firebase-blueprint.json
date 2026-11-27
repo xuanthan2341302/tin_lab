@@ -1,0 +1,457 @@
+{
+  "entities": {
+    "QuestionBankImport": {
+      "title": "QuestionBankImport",
+      "description": "Metadata for an uploaded DOCX/PDF question bank document import batch or manual entry batch.",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the teacher who performed the import.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "fileName": {
+          "type": "string",
+          "description": "Original uploaded document filename or manual bank batch label.",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "fileFormat": {
+          "type": "string",
+          "description": "Uploaded file format.",
+          "enum": ["docx", "pdf", "txt"]
+        },
+        "fileHash": {
+          "type": "string",
+          "description": "SHA-256 hexadecimal hash of the uploaded document contents.",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "bankName": {
+          "type": "string",
+          "description": "Optional question bank group name.",
+          "minLength": 0,
+          "maxLength": 120
+        },
+        "totalExtracted": {
+          "type": "integer",
+          "description": "Total number of questions extracted from the document."
+        },
+        "approvedSavedCount": {
+          "type": "integer",
+          "description": "Number of approved questions saved in this import."
+        },
+        "rejectedCount": {
+          "type": "integer",
+          "description": "Number of extracted questions rejected by the teacher."
+        },
+        "duplicateSkippedCount": {
+          "type": "integer",
+          "description": "Number of duplicate questions skipped during import."
+        },
+        "mcqCount": {
+          "type": "integer",
+          "description": "Optional count of multiple-choice questions saved."
+        },
+        "trueFalseCount": {
+          "type": "integer",
+          "description": "Optional count of true/false questions saved."
+        },
+        "essayCount": {
+          "type": "integer",
+          "description": "Optional count of essay questions saved."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when the import batch was recorded."
+        }
+      },
+      "required": [
+        "ownerUid",
+        "fileName",
+        "fileFormat",
+        "fileHash",
+        "totalExtracted",
+        "approvedSavedCount",
+        "rejectedCount",
+        "duplicateSkippedCount",
+        "createdAt"
+      ]
+    },
+    "QuestionBankItem": {
+      "title": "QuestionBankItem",
+      "description": "An approved question in the teacher's Question Bank supporting multiple-choice (legacy & new), true/false (a-d statements), and essay (with rubric).",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "importId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "contentHash": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "questionType": {
+          "type": "string",
+          "description": "Question format. Legacy items without this field default to multiple_choice.",
+          "enum": ["multiple_choice", "true_false", "essay"]
+        },
+        "bankName": {
+          "type": "string",
+          "description": "Optional question bank group label.",
+          "minLength": 0,
+          "maxLength": 120
+        },
+        "topic": {
+          "type": "string",
+          "description": "Optional curriculum topic metadata.",
+          "minLength": 0,
+          "maxLength": 150
+        },
+        "sourceDocumentName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "sourceDocumentHash": {
+          "type": "string",
+          "minLength": 64,
+          "maxLength": 64,
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "questionOrigin": {
+          "type": "string",
+          "description": "Distinguishes verbatim extracted questions from AI Agent-generated questions.",
+          "enum": ["extracted", "ai_generated"]
+        },
+        "answerSource": {
+          "type": "string",
+          "description": "Origin of detected or matched answer key (e.g. embedded highlight, separate answer file, AI Agent).",
+          "minLength": 0,
+          "maxLength": 300
+        },
+        "sourceFormat": {
+          "type": "string",
+          "enum": ["docx", "pdf", "txt"]
+        },
+        "lessonTitle": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 200
+        },
+        "questionNumber": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "pageNumber": {
+          "type": "integer"
+        },
+        "cognitiveLevel": {
+          "type": "string",
+          "enum": ["recognition", "understanding", "application", "unspecified"]
+        },
+        "questionText": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 4000
+        },
+        "optionA": { "type": "string", "minLength": 1, "maxLength": 1500 },
+        "optionB": { "type": "string", "minLength": 1, "maxLength": 1500 },
+        "optionC": { "type": "string", "minLength": 1, "maxLength": 1500 },
+        "optionD": { "type": "string", "minLength": 1, "maxLength": 1500 },
+        "answerKey": { "type": "string", "enum": ["A", "B", "C", "D"] },
+        "statementA": { "type": "string", "minLength": 1, "maxLength": 1500 },
+        "statementB": { "type": "string", "minLength": 1, "maxLength": 1500 },
+        "statementC": { "type": "string", "minLength": 1, "maxLength": 1500 },
+        "statementD": { "type": "string", "minLength": 1, "maxLength": 1500 },
+        "statementAnswerA": { "type": "boolean" },
+        "statementAnswerB": { "type": "boolean" },
+        "statementAnswerC": { "type": "boolean" },
+        "statementAnswerD": { "type": "boolean" },
+        "rubric": { "type": "string", "minLength": 5, "maxLength": 4000 },
+        "sampleAnswer": { "type": "string", "minLength": 0, "maxLength": 4000 },
+        "explanation": { "type": "string", "minLength": 0, "maxLength": 3000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "ownerUid",
+        "importId",
+        "contentHash",
+        "sourceDocumentName",
+        "sourceDocumentHash",
+        "sourceFormat",
+        "lessonTitle",
+        "questionNumber",
+        "cognitiveLevel",
+        "questionText",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ExamTemplate": {
+      "title": "ExamTemplate",
+      "description": "Configurable examination structure template with duration, multi-part counts/points, scoring rules, and cognitive level distribution.",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "description": { "type": "string", "minLength": 0, "maxLength": 1000 },
+        "schoolFormatLabel": { "type": "string", "minLength": 0, "maxLength": 120 },
+        "durationMinutes": { "type": "integer" },
+        "totalPoints": { "type": "number" },
+        "part1Enabled": { "type": "boolean" },
+        "part1Title": { "type": "string", "minLength": 0, "maxLength": 120 },
+        "part1Count": { "type": "integer" },
+        "part1Points": { "type": "number" },
+        "part2Enabled": { "type": "boolean" },
+        "part2Title": { "type": "string", "minLength": 0, "maxLength": 120 },
+        "part2Count": { "type": "integer" },
+        "part2Points": { "type": "number" },
+        "part2ScoringMode": { "type": "string", "enum": ["tiered_2025", "linear"] },
+        "part3Enabled": { "type": "boolean" },
+        "part3Title": { "type": "string", "minLength": 0, "maxLength": 120 },
+        "part3Count": { "type": "integer" },
+        "part3Points": { "type": "number" },
+        "recognitionPct": { "type": "integer" },
+        "understandingPct": { "type": "integer" },
+        "applicationPct": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "ownerUid",
+        "name",
+        "description",
+        "schoolFormatLabel",
+        "durationMinutes",
+        "totalPoints",
+        "part1Enabled",
+        "part1Title",
+        "part1Count",
+        "part1Points",
+        "part2Enabled",
+        "part2Title",
+        "part2Count",
+        "part2Points",
+        "part2ScoringMode",
+        "part3Enabled",
+        "part3Title",
+        "part3Count",
+        "part3Points",
+        "recognitionPct",
+        "understandingPct",
+        "applicationPct",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PublishedExam": {
+      "title": "PublishedExam",
+      "description": "Student-safe published examination without plain-text answer keys or rubrics; holds sealed grading token for server-side scoring.",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "teacherName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "templateId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "templateName": { "type": "string", "minLength": 1, "maxLength": 150 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "schoolFormatLabel": { "type": "string", "minLength": 0, "maxLength": 120 },
+        "accessCode": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 20,
+          "pattern": "^[A-Z0-9_-]+$"
+        },
+        "status": { "type": "string", "enum": ["published", "closed"] },
+        "durationMinutes": { "type": "integer" },
+        "totalPoints": { "type": "number" },
+        "part1Count": { "type": "integer" },
+        "part1Points": { "type": "number" },
+        "part2Count": { "type": "integer" },
+        "part2Points": { "type": "number" },
+        "part2ScoringMode": { "type": "string", "enum": ["tiered_2025", "linear"] },
+        "part3Count": { "type": "integer" },
+        "part3Points": { "type": "number" },
+        "recognitionPct": { "type": "integer" },
+        "understandingPct": { "type": "integer" },
+        "applicationPct": { "type": "integer" },
+        "questions": { "type": "array" },
+        "sealedGradingPayload": { "type": "string", "minLength": 20, "maxLength": 200000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "ownerUid",
+        "teacherName",
+        "templateId",
+        "templateName",
+        "title",
+        "schoolFormatLabel",
+        "accessCode",
+        "status",
+        "durationMinutes",
+        "totalPoints",
+        "part1Count",
+        "part1Points",
+        "part2Count",
+        "part2Points",
+        "part2ScoringMode",
+        "part3Count",
+        "part3Points",
+        "recognitionPct",
+        "understandingPct",
+        "applicationPct",
+        "questions",
+        "sealedGradingPayload",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "PublishedExamKey": {
+      "title": "PublishedExamKey",
+      "description": "Teacher-only private answer keys, true/false flags, and essay marking rubrics corresponding to a PublishedExam.",
+      "type": "object",
+      "properties": {
+        "ownerUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "examId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "title": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "items": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["ownerUid", "examId", "title", "items", "createdAt", "updatedAt"]
+    },
+    "ExamSubmission": {
+      "title": "ExamSubmission",
+      "description": "Student exam submission with server-side objective scores, AI-assisted essay grading status, and teacher review finalization.",
+      "type": "object",
+      "properties": {
+        "examId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "teacherUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "studentUid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "studentName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "studentClass": { "type": "string", "minLength": 0, "maxLength": 40 },
+        "studentEmail": { "type": "string", "minLength": 0, "maxLength": 150 },
+        "examTitle": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "part1Score": { "type": "number" },
+        "part1Max": { "type": "number" },
+        "part2Score": { "type": "number" },
+        "part2Max": { "type": "number" },
+        "part3AiScore": { "type": "number" },
+        "part3FinalScore": { "type": "number" },
+        "part3Max": { "type": "number" },
+        "totalScore": { "type": "number" },
+        "totalMax": { "type": "number" },
+        "gradingStatus": {
+          "type": "string",
+          "enum": ["auto_graded", "needs_teacher_review", "teacher_reviewed"]
+        },
+        "answers": { "type": "array" },
+        "teacherFeedback": { "type": "string", "minLength": 0, "maxLength": 2000 },
+        "submittedAt": { "type": "string", "format": "date-time" },
+        "reviewedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "examId",
+        "teacherUid",
+        "studentUid",
+        "studentName",
+        "studentClass",
+        "studentEmail",
+        "examTitle",
+        "part1Score",
+        "part1Max",
+        "part2Score",
+        "part2Max",
+        "part3Max",
+        "totalMax",
+        "gradingStatus",
+        "answers",
+        "teacherFeedback",
+        "submittedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/questionBankImports/{importId}": {
+      "schema": { "$ref": "#/entities/QuestionBankImport" },
+      "description": "Uploaded document import logs and manual batch headers owned by authenticated teachers."
+    },
+    "/questionBank/{questionId}": {
+      "schema": { "$ref": "#/entities/QuestionBankItem" },
+      "description": "Approved multi-format questions (MCQ, True/False, Essay) owned by authenticated teachers."
+    },
+    "/examTemplates/{templateId}": {
+      "schema": { "$ref": "#/entities/ExamTemplate" },
+      "description": "Configurable examination structure templates owned by teachers."
+    },
+    "/publishedExams/{examId}": {
+      "schema": { "$ref": "#/entities/PublishedExam" },
+      "description": "Sanitized published exams available to students without plain-text answer keys."
+    },
+    "/publishedExamKeys/{examId}": {
+      "schema": { "$ref": "#/entities/PublishedExamKey" },
+      "description": "Teacher-only answer keys and essay rubrics for published exams."
+    },
+    "/examSubmissions/{submissionId}": {
+      "schema": { "$ref": "#/entities/ExamSubmission" },
+      "description": "Student exam attempts, server-scored results, AI essay review flags, and finalized grades."
+    }
+  }
+}

@@ -1,0 +1,634 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: Default-deny everything
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(ownerUid) {
+      return isVerifiedUser() && request.auth.uid == ownerUid;
+    }
+
+    function isValidSha256(val) {
+      return val is string && val.size() == 64 && val.matches('^[a-f0-9]{64}$');
+    }
+
+    function isValidImport(data) {
+      return data.keys().hasAll([
+          'ownerUid',
+          'fileName',
+          'fileFormat',
+          'fileHash',
+          'totalExtracted',
+          'approvedSavedCount',
+          'rejectedCount',
+          'duplicateSkippedCount',
+          'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid',
+          'fileName',
+          'fileFormat',
+          'fileHash',
+          'bankName',
+          'totalExtracted',
+          'approvedSavedCount',
+          'rejectedCount',
+          'duplicateSkippedCount',
+          'mcqCount',
+          'trueFalseCount',
+          'essayCount',
+          'createdAt'
+        ])
+        && isValidId(data.ownerUid)
+        && data.ownerUid == request.auth.uid
+        && data.fileName is string && data.fileName.size() >= 1 && data.fileName.size() <= 255
+        && data.fileFormat in ['docx', 'pdf', 'txt']
+        && isValidSha256(data.fileHash)
+        && (!('bankName' in data) || (data.bankName is string && data.bankName.size() <= 120))
+        && data.totalExtracted is int && data.totalExtracted >= 0 && data.totalExtracted <= 5000
+        && data.approvedSavedCount is int && data.approvedSavedCount >= 0 && data.approvedSavedCount <= 5000
+        && data.rejectedCount is int && data.rejectedCount >= 0 && data.rejectedCount <= 5000
+        && data.duplicateSkippedCount is int && data.duplicateSkippedCount >= 0 && data.duplicateSkippedCount <= 5000
+        && (!('mcqCount' in data) || (data.mcqCount is int && data.mcqCount >= 0 && data.mcqCount <= 5000))
+        && (!('trueFalseCount' in data) || (data.trueFalseCount is int && data.trueFalseCount >= 0 && data.trueFalseCount <= 5000))
+        && (!('essayCount' in data) || (data.essayCount is int && data.essayCount >= 0 && data.essayCount <= 5000))
+        && data.createdAt is timestamp;
+    }
+
+    function effectiveQuestionType(data) {
+      return ('questionType' in data) ? data.questionType : 'multiple_choice';
+    }
+
+    function isValidMcqFields(data) {
+      return data.keys().hasAll(['optionA', 'optionB', 'optionC', 'optionD', 'answerKey'])
+        && data.optionA is string && data.optionA.size() >= 1 && data.optionA.size() <= 1500
+        && data.optionB is string && data.optionB.size() >= 1 && data.optionB.size() <= 1500
+        && data.optionC is string && data.optionC.size() >= 1 && data.optionC.size() <= 1500
+        && data.optionD is string && data.optionD.size() >= 1 && data.optionD.size() <= 1500
+        && data.answerKey in ['A', 'B', 'C', 'D'];
+    }
+
+    function isValidTrueFalseFields(data) {
+      return data.keys().hasAll([
+          'statementA',
+          'statementB',
+          'statementC',
+          'statementD',
+          'statementAnswerA',
+          'statementAnswerB',
+          'statementAnswerC',
+          'statementAnswerD'
+        ])
+        && data.statementA is string && data.statementA.size() >= 1 && data.statementA.size() <= 1500
+        && data.statementB is string && data.statementB.size() >= 1 && data.statementB.size() <= 1500
+        && data.statementC is string && data.statementC.size() >= 1 && data.statementC.size() <= 1500
+        && data.statementD is string && data.statementD.size() >= 1 && data.statementD.size() <= 1500
+        && data.statementAnswerA is bool
+        && data.statementAnswerB is bool
+        && data.statementAnswerC is bool
+        && data.statementAnswerD is bool;
+    }
+
+    function isValidEssayFields(data) {
+      return data.keys().hasAll(['rubric'])
+        && data.rubric is string && data.rubric.size() >= 5 && data.rubric.size() <= 4000
+        && (!('sampleAnswer' in data) || (data.sampleAnswer is string && data.sampleAnswer.size() <= 4000));
+    }
+
+    function isValidQuestion(data) {
+      return data.keys().hasAll([
+          'ownerUid',
+          'importId',
+          'contentHash',
+          'sourceDocumentName',
+          'sourceDocumentHash',
+          'sourceFormat',
+          'lessonTitle',
+          'questionNumber',
+          'cognitiveLevel',
+          'questionText',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid',
+          'importId',
+          'contentHash',
+          'questionType',
+          'questionOrigin',
+          'answerSource',
+          'bankName',
+          'topic',
+          'sourceDocumentName',
+          'sourceDocumentHash',
+          'sourceFormat',
+          'lessonTitle',
+          'questionNumber',
+          'pageNumber',
+          'cognitiveLevel',
+          'questionText',
+          'optionA',
+          'optionB',
+          'optionC',
+          'optionD',
+          'answerKey',
+          'statementA',
+          'statementB',
+          'statementC',
+          'statementAnswerA',
+          'statementAnswerB',
+          'statementAnswerC',
+          'statementAnswerD',
+          'statementD',
+          'rubric',
+          'sampleAnswer',
+          'explanation',
+          'createdAt',
+          'updatedAt'
+        ])
+        && isValidId(data.ownerUid)
+        && data.ownerUid == request.auth.uid
+        && isValidId(data.importId)
+        && isValidSha256(data.contentHash)
+        && (!('questionType' in data) || data.questionType in ['multiple_choice', 'true_false', 'essay'])
+        && (!('questionOrigin' in data) || data.questionOrigin in ['extracted', 'ai_generated'])
+        && (!('answerSource' in data) || (data.answerSource is string && data.answerSource.size() <= 300))
+        && (!('bankName' in data) || (data.bankName is string && data.bankName.size() <= 120))
+        && (!('topic' in data) || (data.topic is string && data.topic.size() <= 150))
+        && data.sourceDocumentName is string && data.sourceDocumentName.size() >= 1 && data.sourceDocumentName.size() <= 255
+        && isValidSha256(data.sourceDocumentHash)
+        && data.sourceFormat in ['docx', 'pdf', 'txt']
+        && data.lessonTitle is string && data.lessonTitle.size() <= 200
+        && data.questionNumber is string && data.questionNumber.size() >= 1 && data.questionNumber.size() <= 40
+        && (!('pageNumber' in data) || data.pageNumber == null || (data.pageNumber is int && data.pageNumber >= 1 && data.pageNumber <= 5000))
+        && data.cognitiveLevel in ['recognition', 'understanding', 'application', 'unspecified']
+        && data.questionText is string && data.questionText.size() >= 5 && data.questionText.size() <= 4000
+        && (!('explanation' in data) || (data.explanation is string && data.explanation.size() <= 3000))
+        && (
+          (effectiveQuestionType(data) == 'multiple_choice' && isValidMcqFields(data)) ||
+          (effectiveQuestionType(data) == 'true_false' && isValidTrueFalseFields(data)) ||
+          (effectiveQuestionType(data) == 'essay' && isValidEssayFields(data))
+        )
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidExamTemplate(data) {
+      return data.keys().hasAll([
+          'ownerUid',
+          'name',
+          'description',
+          'schoolFormatLabel',
+          'durationMinutes',
+          'totalPoints',
+          'part1Enabled',
+          'part1Title',
+          'part1Count',
+          'part1Points',
+          'part2Enabled',
+          'part2Title',
+          'part2Count',
+          'part2Points',
+          'part2ScoringMode',
+          'part3Enabled',
+          'part3Title',
+          'part3Count',
+          'part3Points',
+          'recognitionPct',
+          'understandingPct',
+          'applicationPct',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid',
+          'name',
+          'description',
+          'schoolFormatLabel',
+          'durationMinutes',
+          'totalPoints',
+          'part1Enabled',
+          'part1Title',
+          'part1Count',
+          'part1Points',
+          'part2Enabled',
+          'part2Title',
+          'part2Count',
+          'part2Points',
+          'part2ScoringMode',
+          'part3Enabled',
+          'part3Title',
+          'part3Count',
+          'part3Points',
+          'recognitionPct',
+          'understandingPct',
+          'applicationPct',
+          'createdAt',
+          'updatedAt'
+        ])
+        && isValidId(data.ownerUid)
+        && data.ownerUid == request.auth.uid
+        && data.name is string && data.name.size() >= 1 && data.name.size() <= 150
+        && data.description is string && data.description.size() <= 1000
+        && data.schoolFormatLabel is string && data.schoolFormatLabel.size() <= 120
+        && data.durationMinutes is int && data.durationMinutes >= 5 && data.durationMinutes <= 180
+        && data.totalPoints is number && data.totalPoints > 0 && data.totalPoints <= 100
+        && data.part1Enabled is bool
+        && data.part1Title is string && data.part1Title.size() <= 120
+        && data.part1Count is int && data.part1Count >= 0 && data.part1Count <= 100
+        && data.part1Points is number && data.part1Points >= 0 && data.part1Points <= 100
+        && data.part2Enabled is bool
+        && data.part2Title is string && data.part2Title.size() <= 120
+        && data.part2Count is int && data.part2Count >= 0 && data.part2Count <= 50
+        && data.part2Points is number && data.part2Points >= 0 && data.part2Points <= 100
+        && data.part2ScoringMode in ['tiered_2025', 'linear']
+        && data.part3Enabled is bool
+        && data.part3Title is string && data.part3Title.size() <= 120
+        && data.part3Count is int && data.part3Count >= 0 && data.part3Count <= 20
+        && data.part3Points is number && data.part3Points >= 0 && data.part3Points <= 100
+        && data.recognitionPct is int && data.recognitionPct >= 0 && data.recognitionPct <= 100
+        && data.understandingPct is int && data.understandingPct >= 0 && data.understandingPct <= 100
+        && data.applicationPct is int && data.applicationPct >= 0 && data.applicationPct <= 100
+        && (data.recognitionPct + data.understandingPct + data.applicationPct) == 100
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPublishedExam(data) {
+      return data.keys().hasAll([
+          'ownerUid',
+          'teacherName',
+          'templateId',
+          'templateName',
+          'title',
+          'schoolFormatLabel',
+          'accessCode',
+          'status',
+          'durationMinutes',
+          'totalPoints',
+          'part1Count',
+          'part1Points',
+          'part2Count',
+          'part2Points',
+          'part2ScoringMode',
+          'part3Count',
+          'part3Points',
+          'recognitionPct',
+          'understandingPct',
+          'applicationPct',
+          'questions',
+          'sealedGradingPayload',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerUid',
+          'teacherName',
+          'templateId',
+          'templateName',
+          'title',
+          'schoolFormatLabel',
+          'accessCode',
+          'status',
+          'durationMinutes',
+          'totalPoints',
+          'part1Count',
+          'part1Points',
+          'part2Count',
+          'part2Points',
+          'part2ScoringMode',
+          'part3Count',
+          'part3Points',
+          'recognitionPct',
+          'understandingPct',
+          'applicationPct',
+          'questions',
+          'sealedGradingPayload',
+          'createdAt',
+          'updatedAt'
+        ])
+        && isValidId(data.ownerUid)
+        && data.ownerUid == request.auth.uid
+        && data.teacherName is string && data.teacherName.size() >= 1 && data.teacherName.size() <= 120
+        && isValidId(data.templateId)
+        && data.templateName is string && data.templateName.size() >= 1 && data.templateName.size() <= 150
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.schoolFormatLabel is string && data.schoolFormatLabel.size() <= 120
+        && data.accessCode is string && data.accessCode.size() >= 4 && data.accessCode.size() <= 20 && data.accessCode.matches('^[A-Z0-9_\\-]+$')
+        && data.status in ['published', 'closed']
+        && data.durationMinutes is int && data.durationMinutes >= 5 && data.durationMinutes <= 180
+        && data.totalPoints is number && data.totalPoints > 0 && data.totalPoints <= 100
+        && data.part1Count is int && data.part1Count >= 0 && data.part1Count <= 100
+        && data.part1Points is number && data.part1Points >= 0 && data.part1Points <= 100
+        && data.part2Count is int && data.part2Count >= 0 && data.part2Count <= 50
+        && data.part2Points is number && data.part2Points >= 0 && data.part2Points <= 100
+        && data.part2ScoringMode in ['tiered_2025', 'linear']
+        && data.part3Count is int && data.part3Count >= 0 && data.part3Count <= 20
+        && data.part3Points is number && data.part3Points >= 0 && data.part3Points <= 100
+        && data.recognitionPct is int && data.recognitionPct >= 0 && data.recognitionPct <= 100
+        && data.understandingPct is int && data.understandingPct >= 0 && data.understandingPct <= 100
+        && data.applicationPct is int && data.applicationPct >= 0 && data.applicationPct <= 100
+        && data.questions is list && data.questions.size() >= 1 && data.questions.size() <= 150 && data.questions[0] is map
+        && data.sealedGradingPayload is string && data.sealedGradingPayload.size() >= 20 && data.sealedGradingPayload.size() <= 200000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidPublishedExamKey(data) {
+      return data.keys().hasAll(['ownerUid', 'examId', 'title', 'items', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['ownerUid', 'examId', 'title', 'items', 'createdAt', 'updatedAt'])
+        && isValidId(data.ownerUid)
+        && data.ownerUid == request.auth.uid
+        && isValidId(data.examId)
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 200
+        && data.items is list && data.items.size() >= 1 && data.items.size() <= 150 && data.items[0] is map
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSubmission(data) {
+      return data.keys().hasAll([
+          'examId',
+          'teacherUid',
+          'studentUid',
+          'studentName',
+          'studentClass',
+          'studentEmail',
+          'examTitle',
+          'part1Score',
+          'part1Max',
+          'part2Score',
+          'part2Max',
+          'part3Max',
+          'totalMax',
+          'gradingStatus',
+          'answers',
+          'teacherFeedback',
+          'submittedAt'
+        ])
+        && data.keys().hasOnly([
+          'examId',
+          'teacherUid',
+          'studentUid',
+          'studentName',
+          'studentClass',
+          'studentEmail',
+          'examTitle',
+          'part1Score',
+          'part1Max',
+          'part2Score',
+          'part2Max',
+          'part3AiScore',
+          'part3FinalScore',
+          'part3Max',
+          'totalScore',
+          'totalMax',
+          'gradingStatus',
+          'answers',
+          'teacherFeedback',
+          'submittedAt',
+          'reviewedAt'
+        ])
+        && isValidId(data.examId)
+        && isValidId(data.teacherUid)
+        && isValidId(data.studentUid)
+        && data.studentName is string && data.studentName.size() >= 1 && data.studentName.size() <= 120
+        && data.studentClass is string && data.studentClass.size() <= 40
+        && data.studentEmail is string && data.studentEmail.size() <= 150
+        && data.examTitle is string && data.examTitle.size() >= 1 && data.examTitle.size() <= 200
+        && data.part1Score is number && data.part1Score >= 0 && data.part1Score <= 100
+        && data.part1Max is number && data.part1Max >= 0 && data.part1Max <= 100
+        && data.part2Score is number && data.part2Score >= 0 && data.part2Score <= 100
+        && data.part2Max is number && data.part2Max >= 0 && data.part2Max <= 100
+        && (!('part3AiScore' in data) || data.part3AiScore == null || (data.part3AiScore is number && data.part3AiScore >= 0 && data.part3AiScore <= 100))
+        && (!('part3FinalScore' in data) || data.part3FinalScore == null || (data.part3FinalScore is number && data.part3FinalScore >= 0 && data.part3FinalScore <= 100))
+        && data.part3Max is number && data.part3Max >= 0 && data.part3Max <= 100
+        && (!('totalScore' in data) || data.totalScore == null || (data.totalScore is number && data.totalScore >= 0 && data.totalScore <= data.totalMax))
+        && data.totalMax is number && data.totalMax > 0 && data.totalMax <= 100
+        && data.gradingStatus in ['auto_graded', 'needs_teacher_review', 'teacher_reviewed']
+        && data.answers is list && data.answers.size() >= 1 && data.answers.size() <= 150 && data.answers[0] is map
+        && data.teacherFeedback is string && data.teacherFeedback.size() <= 2000
+        && data.submittedAt is timestamp
+        && (!('reviewedAt' in data) || data.reviewedAt == null || data.reviewedAt is timestamp);
+    }
+
+    match /questionBankImports/{importId} {
+      allow get: if isValidId(importId) && isOwner(existing().ownerUid);
+      allow list: if isVerifiedUser() && existing().ownerUid == request.auth.uid;
+      allow create: if isValidId(importId)
+        && isVerifiedUser()
+        && isValidImport(incoming())
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(importId) && isOwner(existing().ownerUid);
+    }
+
+    match /questionBank/{questionId} {
+      allow get: if isValidId(questionId) && isOwner(existing().ownerUid);
+      allow list: if isVerifiedUser() && existing().ownerUid == request.auth.uid;
+      allow create: if isValidId(questionId)
+        && isVerifiedUser()
+        && isValidQuestion(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/questionBankImports/$(incoming().importId))
+        && getAfter(/databases/$(database)/documents/questionBankImports/$(incoming().importId)).data.ownerUid == request.auth.uid;
+      allow update: if isValidId(questionId)
+        && isOwner(existing().ownerUid)
+        && isValidQuestion(incoming())
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().importId == existing().importId
+        && incoming().contentHash == existing().contentHash
+        && incoming().sourceDocumentName == existing().sourceDocumentName
+        && incoming().sourceDocumentHash == existing().sourceDocumentHash
+        && incoming().sourceFormat == existing().sourceFormat
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          (!('questionType' in existing()) && (!('questionType' in incoming()) || incoming().questionType == 'multiple_choice')) ||
+          ('questionType' in existing() && 'questionType' in incoming() && incoming().questionType == existing().questionType)
+        )
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'questionType',
+          'bankName',
+          'topic',
+          'explanation',
+          'lessonTitle',
+          'questionNumber',
+          'pageNumber',
+          'cognitiveLevel',
+          'questionText',
+          'optionA',
+          'optionB',
+          'optionC',
+          'optionD',
+          'answerKey',
+          'statementA',
+          'statementB',
+          'statementC',
+          'statementD',
+          'statementAnswerA',
+          'statementAnswerB',
+          'statementAnswerC',
+          'statementAnswerD',
+          'rubric',
+          'sampleAnswer',
+          'updatedAt'
+        ]);
+      allow delete: if isValidId(questionId) && isOwner(existing().ownerUid);
+    }
+
+    match /examTemplates/{templateId} {
+      allow get: if isValidId(templateId) && isOwner(existing().ownerUid);
+      allow list: if isVerifiedUser() && existing().ownerUid == request.auth.uid;
+      allow create: if isValidId(templateId)
+        && isVerifiedUser()
+        && isValidExamTemplate(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isValidId(templateId)
+        && isOwner(existing().ownerUid)
+        && isValidExamTemplate(incoming())
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'name',
+          'description',
+          'schoolFormatLabel',
+          'durationMinutes',
+          'totalPoints',
+          'part1Enabled',
+          'part1Title',
+          'part1Count',
+          'part1Points',
+          'part2Enabled',
+          'part2Title',
+          'part2Count',
+          'part2Points',
+          'part2ScoringMode',
+          'part3Enabled',
+          'part3Title',
+          'part3Count',
+          'part3Points',
+          'recognitionPct',
+          'understandingPct',
+          'applicationPct',
+          'updatedAt'
+        ]);
+      allow delete: if isValidId(templateId) && isOwner(existing().ownerUid);
+    }
+
+    match /publishedExams/{examId} {
+      allow get: if isValidId(examId) && (existing().status == 'published' || isOwner(existing().ownerUid));
+      allow list: if existing().status == 'published' || (isVerifiedUser() && existing().ownerUid == request.auth.uid);
+      allow create: if isValidId(examId)
+        && isVerifiedUser()
+        && isValidPublishedExam(incoming())
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/publishedExamKeys/$(examId))
+        && getAfter(/databases/$(database)/documents/publishedExamKeys/$(examId)).data.ownerUid == request.auth.uid;
+      allow update: if isValidId(examId)
+        && isOwner(existing().ownerUid)
+        && isValidPublishedExam(incoming())
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().templateId == existing().templateId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'title',
+          'status',
+          'accessCode',
+          'updatedAt'
+        ]);
+      allow delete: if isValidId(examId) && isOwner(existing().ownerUid);
+    }
+
+    match /publishedExamKeys/{examId} {
+      allow get: if isValidId(examId) && isOwner(existing().ownerUid);
+      allow list: if isVerifiedUser() && existing().ownerUid == request.auth.uid;
+      allow create: if isValidId(examId)
+        && isVerifiedUser()
+        && isValidPublishedExamKey(incoming())
+        && incoming().examId == examId
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time
+        && existsAfter(/databases/$(database)/documents/publishedExams/$(examId))
+        && getAfter(/databases/$(database)/documents/publishedExams/$(examId)).data.ownerUid == request.auth.uid;
+      allow update: if isValidId(examId)
+        && isOwner(existing().ownerUid)
+        && isValidPublishedExamKey(incoming())
+        && incoming().ownerUid == existing().ownerUid
+        && incoming().examId == existing().examId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'title',
+          'items',
+          'updatedAt'
+        ]);
+      allow delete: if isValidId(examId) && isOwner(existing().ownerUid);
+    }
+
+    match /examSubmissions/{submissionId} {
+      allow get: if isValidId(submissionId)
+        && isVerifiedUser()
+        && (existing().studentUid == request.auth.uid || existing().teacherUid == request.auth.uid);
+      allow list: if isVerifiedUser()
+        && (existing().studentUid == request.auth.uid || existing().teacherUid == request.auth.uid);
+      allow create: if isValidId(submissionId)
+        && isVerifiedUser()
+        && isValidSubmission(incoming())
+        && incoming().studentUid == request.auth.uid
+        && incoming().submittedAt == request.time
+        && (!('reviewedAt' in incoming()) || incoming().reviewedAt == null)
+        && exists(/databases/$(database)/documents/publishedExams/$(incoming().examId))
+        && get(/databases/$(database)/documents/publishedExams/$(incoming().examId)).data.status == 'published'
+        && get(/databases/$(database)/documents/publishedExams/$(incoming().examId)).data.ownerUid == incoming().teacherUid;
+      allow update: if isValidId(submissionId)
+        && isVerifiedUser()
+        && existing().teacherUid == request.auth.uid
+        && isValidSubmission(incoming())
+        && incoming().examId == existing().examId
+        && incoming().teacherUid == existing().teacherUid
+        && incoming().studentUid == existing().studentUid
+        && incoming().submittedAt == existing().submittedAt
+        && incoming().reviewedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'part3AiScore',
+          'part3FinalScore',
+          'totalScore',
+          'gradingStatus',
+          'answers',
+          'teacherFeedback',
+          'reviewedAt'
+        ]);
+      allow delete: if isValidId(submissionId)
+        && isVerifiedUser()
+        && existing().teacherUid == request.auth.uid;
+    }
+  }
+}

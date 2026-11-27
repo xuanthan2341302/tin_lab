@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+Allow: /huong-dan
+Allow: /lien-he
+Allow: /thong-ke
+Allow: /googlec63c64710272aece.html
+Disallow: /hoc-sinh
+Disallow: /giao-vien
+Disallow: /api/
+
+Sitemap: https://ais-pre-fra34bcjqzk4pbluowypxl-385969079523.asia-east1.run.app/sitemap.xml
